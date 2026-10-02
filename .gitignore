@@ -1,0 +1,47 @@
+# Maven build output
+target/
+*.class
+
+# IDE settings
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+
+# Runtime data (including data directories inside release packages)
+data/
+logs/
+*.log
+
+# Local secrets and encrypted user data
+.env
+.env.*
+!.env.example
+*.enc
+*.key
+*.jks
+*.p12
+*.pfx
+
+# SQLite transient files; keep the bundled public exercise.db tracked
+*.db-journal
+*.db-shm
+*.db-wal
+
+# JVM crash reports
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# OS and editor temporary files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
