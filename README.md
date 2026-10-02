@@ -236,31 +236,97 @@ UML 图为可选内容。
 
 MailAssistant 建议采用“分层存储”，不要把所有内容放进同一个文件。
 
-### 4.1 习题库：SQLite
+### 4.1 习题库：SQLite + 结构化正文 + 内嵌资源
 
-推荐：
+习题可能包含文字、代码、示意图、数据表格和数学公式，不能只用一个纯文本字段保存。v1.0.0 推荐将完整题库保存在一个 SQLite 文件中：
 
-```text
-SQLite
+| 内容 | 存储方式 | 用途 |
+| --- | --- | --- |
+| 章节、题号、题型、排序与要求 | 普通关系表字段 | 筛选、排序与完整性检查 |
+| 题目正文 | `content` 字段中的结构化 JSON | 保存文字、图片、表格、公式的顺序与语义 |
+| 可搜索文字 | `content_text` 字段中的纯文本 | 搜索与文字摘要，由结构化正文派生 |
+| 图片与公式渲染图 | 资源表中的 BLOB 二进制数据 | 离线显示，避免外部文件丢失 |
+| 数据库与题库版本 | `metadata` 表 | 格式迁移与内容更新 |
+
+SQLite 负责章节、习题和资源管理；JSON 只描述单道题目的正文结构，不替代关系表。公开题库不包含用户隐私，无需整体加密，也不得写入用户答案、截图或邮箱凭据。
+
+#### 4.1.1 题目正文格式
+
+正文使用带 `schemaVersion` 的内容块数组，按照数组顺序展示。v1.0.0 至少支持：
+
+- `paragraph`：段落，内部 `inlines` 支持 `text` 和行内 `formula`；
+- `code`：代码文本与语言标识，保留缩进和换行；
+- `image`：题目插图、流程图、坐标图或复杂图表，通过 `assetId` 引用资源；
+- `table`：结构化表头与数据行，单元格使用与段落相同的 `inlines` 格式；
+- `formula`：独立公式，保存 LaTeX 源码及其 PNG 渲染资源引用。
+
+示例（资源 ID 仅作示意，导入时必须有对应资源记录）：
+
+```json
+{
+  "schemaVersion": 1,
+  "blocks": [
+    {
+      "type": "paragraph",
+      "inlines": [
+        { "type": "text", "text": "根据下图和表格，计算 " },
+        {
+          "type": "formula",
+          "latex": "x^2",
+          "assetId": "formula-x-squared",
+          "alt": "x 的平方"
+        },
+        { "type": "text", "text": " 的值。" }
+      ]
+    },
+    {
+      "type": "image",
+      "assetId": "figure-001",
+      "alt": "矩形的长为 x，宽为 2",
+      "caption": "图 1：矩形示意图"
+    },
+    {
+      "type": "table",
+      "caption": "表 1：已知数据",
+      "headers": [
+        { "inlines": [{ "type": "text", "text": "变量" }] },
+        { "inlines": [{ "type": "text", "text": "值" }] }
+      ],
+      "rows": [
+        [
+          { "inlines": [{ "type": "text", "text": "x" }] },
+          { "inlines": [{ "type": "text", "text": "3" }] }
+        ]
+      ]
+    },
+    {
+      "type": "formula",
+      "latex": "S = \\frac{1}{2} a h",
+      "assetId": "formula-area",
+      "alt": "S 等于二分之一乘以 a 乘以 h",
+      "number": "(1)"
+    }
+  ]
+}
 ```
 
-用于存储：
+格式约定：
 
-- 章节；
-- 题号；
-- 题目正文；
-- 题目类型；
-- 是否要求 UML；
-- 是否要求运行结果；
-- 题目排序；
-- 题库版本。
+- `latex` 保存公式本身，不包含 `$...$` 或 `\\[...\\]` 定界符；JSON 中的反斜杠需要转义。
+- 行内公式置于 `inlines`，独立公式直接作为内容块；两者都要求可读的 `alt` 和渲染图。
+- 简单数据表优先存为 `table`，保留可复制和可编辑的数据；v1.0.0 要求每行单元格数量与表头一致。
+- 复杂合并单元格表格、统计图、几何图等可以先作为 `image` 保存，并补充文字说明。后续需要重绘统计图时再扩展图表数据块。
+- 正文不保存任意 HTML、JavaScript、远程图片 URL、绝对磁盘路径或 Base64 图片。渲染器根据已知内容块生成展示内容，并对文本进行转义。
 
-推荐表结构：
+#### 4.1.2 推荐表结构
 
 ```sql
+-- 每个 JDBC 连接初始化时都要开启外键约束。
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE chapter (
     id          INTEGER PRIMARY KEY,
-    chapter_no  INTEGER NOT NULL,
+    chapter_no  INTEGER NOT NULL UNIQUE,
     title       TEXT NOT NULL,
     sort_order  INTEGER NOT NULL
 );
@@ -271,25 +337,82 @@ CREATE TABLE exercise (
     exercise_no       TEXT NOT NULL,
     title             TEXT,
     content           TEXT NOT NULL,
+    content_text      TEXT NOT NULL DEFAULT '',
     exercise_type     TEXT NOT NULL,
     require_result    INTEGER NOT NULL DEFAULT 0,
     allow_uml         INTEGER NOT NULL DEFAULT 1,
     sort_order        INTEGER NOT NULL,
-    FOREIGN KEY (chapter_id) REFERENCES chapter(id)
+    FOREIGN KEY (chapter_id) REFERENCES chapter(id),
+    UNIQUE (chapter_id, exercise_no)
 );
+
+CREATE TABLE asset (
+    id          TEXT PRIMARY KEY NOT NULL,
+    mime_type   TEXT NOT NULL CHECK (mime_type IN ('image/png', 'image/jpeg')),
+    data        BLOB NOT NULL,
+    sha256      TEXT NOT NULL UNIQUE CHECK (length(sha256) = 64),
+    byte_size   INTEGER NOT NULL CHECK (byte_size > 0 AND byte_size = length(data)),
+    width_px    INTEGER NOT NULL CHECK (width_px > 0),
+    height_px   INTEGER NOT NULL CHECK (height_px > 0)
+);
+
+-- 同一资源可被多道题目复用；删除题目不会删除共享资源。
+CREATE TABLE exercise_asset (
+    exercise_id INTEGER NOT NULL,
+    asset_id    TEXT NOT NULL,
+    PRIMARY KEY (exercise_id, asset_id),
+    FOREIGN KEY (exercise_id) REFERENCES exercise(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES asset(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE metadata (
+    key   TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+);
+
+CREATE INDEX idx_exercise_chapter_sort ON exercise(chapter_id, sort_order);
 ```
 
-选择 SQLite 的原因：
+`metadata` 至少保存 `schema_version`（数据库结构版本）和 `content_version`（题库内容版本）。正文中的 `schemaVersion` 单独标记 JSON 格式版本，三者不要混用。
 
-- 比 JSON 更适合按章节、题号查询；
-- 数据量增加后依然容易维护；
-- 可以给题库增加版本号；
-- 后续可以增加“搜索题目”“题型筛选”等功能；
-- 不需要部署数据库服务器；
-- 单个 `.db` 文件即可随程序发布；
-- Java 可通过 JDBC 直接访问。
+外键只约束关系表，不能自动检查 JSON 中的 `assetId`。题库导入程序必须递归校验内容块及单元格，确保所有资源引用存在，并在同一事务中写入正文、资源和 `exercise_asset` 关系。`content_text` 同步从段落、代码、表格文字、图片说明及公式 LaTeX / `alt` 派生，不作为第二份可独立编辑的正文。
 
-题库本身不包含用户隐私，因此无需对整个题库数据库加密。
+#### 4.1.3 图表与公式资源
+
+- 图片以原始二进制 BLOB 保存，通过 SHA-256 去重。说明文字属于正文中的引用位置，同一图片在不同题目中可以有不同说明。
+- v1.0.0 运行时只使用 PNG / JPEG。公式与线条图优先采用 PNG；扫描题目或照片可采用 JPEG。SVG 等源素材需要在题库制作阶段转换。
+- 公式同时保存 LaTeX 源码和预先生成的 PNG：源码用于维护、检索和重新渲染，PNG 用于各输出端的一致展示。
+- 公式图片在题库制作或导入阶段准备好；桌面应用不要求用户安装 TeX，也不依赖在线公式服务或 CDN。公式编辑后的图片必须重新生成并一起保存，不能继续引用旧图。
+- 资源导入时校验实际图片格式、能否解码、像素尺寸、文件大小与 SHA-256；限制单张图片及整份题库的体积。显示时保持宽高比，正文中的公式图按行内或独立块布局缩放。
+- v1.0.0 不识别扫描图片中的文字或公式；无法转录的内容可以保留为图片，并提供文字说明。
+
+#### 4.1.4 预览、邮件与 DOCX 导出
+
+三个输出端使用同一份结构化正文和资源数据：
+
+| 输出端 | 文字与表格 | 图片与公式 |
+| --- | --- | --- |
+| JavaFX 预览 | 生成经过转义的 HTML 段落、代码块和表格 | 从数据库读取，必要时写入 `data/cache/`，使用本地资源展示 |
+| HTML 邮件 | 生成静态 HTML 与内联样式 | 使用 `cid:` 引用 MIME 内嵌图片，包含公式 PNG |
+| DOCX | 转为 POI 段落、代码文本和原生 Word 表格 | 插入图片，公式在 v1.0.0 中以图片呈现 |
+
+公式 PNG 可以离线显示，但不是 Word 中可编辑的原生公式。原生 Word 公式转换可在后续版本扩展。邮件输出不依赖 JavaScript 执行公式排版，也不引用本地文件路径。
+
+题目自带的图表和公式属于题目内容，不替代用户必须提供的运行结果截图，也不计作用户可选的 UML 图。生成作业草稿时，应保存所选题目正文和资源的快照到草稿目录，沿用草稿加密要求，避免后续题库更新导致已保存作业内容变化。
+
+#### 4.1.5 发布与完整性检查
+
+公开题库随项目保存在 `src/main/resources/database/exercise.db`，图表和公式图片已包含在数据库中，不需要额外的图片文件夹。release 版首次运行时将内置题库复制到 `<应用根目录>/data/database/exercise.db`，再通过 JDBC 访问；运行过程中按只读题库使用，不将缓存或用户数据写回其中。运行时文件统一位于应用根目录下的 `data/`，不使用 C 盘用户目录。
+
+发布或导入题库前至少检查：
+
+- 数据库外键、章节内题号唯一性与题目排序；
+- 正文 JSON 格式版本、允许的内容块类型和必填字段；
+- 表格行列数量、公式源码与渲染图是否齐全；
+- JSON 资源引用与 `exercise_asset` 关系一致，图片可解码且摘要匹配；
+- 同一题目包含文字、图表、行内公式和独立公式时，预览、邮件正文与 DOCX 的内容顺序一致。
+
+现有纯文本题库迁移时，将原 `content` 包装为一个 `paragraph` 内容块，并保留原文到 `content_text`。题库更新需先校验候选数据库，关闭数据库连接后再替换运行时副本，保留可恢复的旧版本；不要在每次启动时直接覆盖已有题库。
 
 ### 4.2 用户配置：AES-GCM 加密文件
 

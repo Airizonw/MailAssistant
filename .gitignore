@@ -2,6 +2,9 @@
 target/
 *.class
 
+# Local exercise-bank preparation tools and source scans
+/tools/
+
 # IDE settings
 .idea/
 *.iml
