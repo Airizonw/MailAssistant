@@ -121,6 +121,20 @@
 
     <build>
         <plugins>
+            <!-- Enables the plain Launcher in a jpackage image with adjacent dependency JARs. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.mailassistant.Launcher</mainClass>
+                            <addClasspath>true</addClasspath>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
