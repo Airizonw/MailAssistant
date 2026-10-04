@@ -2,8 +2,12 @@
 target/
 *.class
 
-# Local exercise-bank preparation tools and source scans
-/tools/
+# Generated tool caches and local backups (scripts and source scans are tracked)
+__pycache__/
+*.py[cod]
+/tools/exercise_bank/backups/
+/tools/runtime-data-backups/
+*.building
 
 # IDE settings
 .idea/

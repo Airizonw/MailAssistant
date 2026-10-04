@@ -102,6 +102,20 @@ Java-学号-姓名-学院-第X章作业
 | QQ | `@qq.com` | `smtp.qq.com` | `465` | `SSL` |
 | 163 | `@163.com` | `smtp.163.com` | `465` | `SSL` |
 
+### QQ 邮箱开启 SMTP 并获取授权码
+
+1. 在 QQ 邮箱网页版的设置页面，点击左侧「账号与安全」。
+
+   ![QQ 邮箱设置菜单中的账号与安全入口](docs/images/qq-mail-account-security.png)
+
+2. 进入「安全设置」，找到「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按页面提示开启服务并完成验证。下图展示的是服务**已开启**的状态；此时点击「生成授权码」，按提示取得用于 MailAssistant 的授权码。
+
+   ![QQ 邮箱安全设置中的 SMTP 服务与生成授权码按钮](docs/images/qq-mail-smtp-settings.png)
+
+3. 返回 MailAssistant 的「个人中心」，选择 QQ 服务商和「授权码」认证，将生成的授权码填入「授权码 / Token」，点击「保存设置」。这里使用的是授权码，不是 QQ 登录密码或邮箱独立密码。
+
+### 在应用中保存邮箱配置
+
 使用 SMTP 授权码时，先在对应邮箱服务商的账户设置中开启 SMTP 并取得授权码，在程序中选择「授权码」认证，将授权码填入「授权码 / Token」，再点击「保存设置」。凭据必须属于当前发件邮箱，不能用 QQ 登录密码替代 SMTP 授权码。SMTP 主机、端口与 SSL / STARTTLS 模式需相互匹配。
 
 - 保存设置只保存本地配置，不连接服务器验证凭据，也不发送邮件；程序没有独立的「测试连接」按钮。
@@ -183,6 +197,22 @@ mvn test "-DuiSmoke=true"
 
 测试覆盖正文与 DOCX、MIME 邮件、完整性校验、加密资料及草稿、设置、单实例、题库升级和桌面行为。更详细的操作与开发说明见 [开发与运行](docs/development.md)，图标和托盘实现见 [桌面集成](docs/desktop-integration.md)。
 
+## 题库校对工具
+
+`tools/` 随仓库提供，包含题库转录脚本、建表 SQL、34 张原始截图与资源校对图。无需运行这些工具即可使用应用；校对时可将 `tools/exercise_bank/sources/` 中的原图与题目正文逐项比较。
+
+在项目根目录使用 Python 3.10 或以上版本执行：
+
+```powershell
+python -m pip install Pillow
+# 校验现有题库与图片裁切，刷新 review/ 中的资源校对图
+python tools/exercise_bank/audit.py
+# 修改转录内容后重建题库（会替换内置 exercise.db，并在本地备份旧库）
+python tools/exercise_bank/build.py
+```
+
+第 1～4 章转录位于 `build.py`，第 5～19 章位于 `chapters_05_19.py`，表结构位于 `schema.sql`。校对流程、输出文件与历史发布辅助脚本的使用条件见 [题库重建与验证](docs/exercise-bank.md#重建与验证)。工具备份、Python 缓存和临时数据库不纳入 Git。
+
 ## 技术与源码目录
 
 | 组件 | 项目使用版本 / 用途 |
@@ -214,6 +244,7 @@ src/main/resources/   # 内置题库、CSS 与图标
 src/test/             # 工作流、设置、桌面与界面测试
 packaging/            # Windows 打包脚本和 EXE 图标
 docs/                 # 开发、桌面集成与题库文档
+tools/                # 题库转录、原图、校对及历史发布辅助工具
 pom.xml               # Maven 配置
 ```
 

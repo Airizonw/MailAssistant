@@ -48,3 +48,5 @@ Windows 可执行文件图标独立位于 `packaging/icons/MailAssistant.ico`。
 输出 `target/release/MailAssistant/MailAssistant.exe`，运行时自带 Java，并使用已提供的 ICO。脚本不会覆盖已有发布目录；若已存在，请先自行备份/移动该目录再构建。此脚本生成 app-image，不生成安装器，不需要 WiX。
 
 可以通过 `-Destination target/release-next` 构建到独立目录。替换原路径的 EXE 后，若资源管理器仍显示旧 Java 图标，运行 `./packaging/windows/refresh-icon.ps1` 通知 Windows 更新图标缓存，无需删除缓存或重启资源管理器。
+
+`tools/deploy-latest.ps1` 与 `tools/verify-release.py` 随仓库保留，用于固定目录的历史数据迁移及检查；其前提、删除范围与限制见 [历史发布辅助脚本](exercise-bank.md#历史发布辅助脚本)。常规纯净构建使用本节的 `package.ps1`。

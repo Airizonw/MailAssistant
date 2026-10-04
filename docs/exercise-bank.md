@@ -69,16 +69,47 @@
 
 ## 重建与验证
 
-本地生成脚本及转录文本位于 `tools/exercise_bank/build.py` 和 `chapters_05_19.py`，原始图片保存在同目录的 `sources/`，与用户提供的图片字节一致。`tools/` 不提交到 Git，克隆仓库后可直接使用已提交的题库；如需重建，需另行取得该本地工具目录及原图。维护题干时修改脚本中的转录内容；更换图片时同步更新资源裁切坐标。
+`tools/` 随仓库提供。克隆后可直接使用已提交的题库，也可利用原图和转录脚本校对、重建，无需另行取得工具目录。
 
-使用安装了 Pillow 的 Python 3 执行：
+| 路径（相对 `tools/exercise_bank/`） | 用途 |
+| --- | --- |
+| `build.py` | 第 1～4 章转录内容、资源提取、完整性校验和题库生成入口 |
+| `chapters_05_19.py` | 第 5～19 章转录内容及图片裁切坐标 |
+| `schema.sql` | 独立维护的 SQLite 建表语句，不依赖 README 内容 |
+| `sources/` | 34 张原始截图，用于逐题校对和资源提取 |
+| `audit.py` | 校验现有题库、比对全部资源与原图裁切像素并生成校对图 |
+| `review/` | 第 5～19 章的 25 张资源联系表，供目视检查裁切范围；随仓库提供 |
+| `backups/` | 重建时生成的旧题库备份，仅保留在本地，Git 忽略 |
 
-```shell
+在项目根目录使用 Python 3.10 或以上版本和 Pillow：
+
+```powershell
+python -m pip install Pillow
+# 校对现有数据库，不替换题库；更新 review/assets-*.png
+python tools/exercise_bank/audit.py
+# 修改转录内容或裁切坐标后重建
 python tools/exercise_bank/build.py
+# 复核重建结果
+python tools/exercise_bank/audit.py
 ```
 
-脚本直接读取 README 中的 SQL 建表，写入临时数据库，验证成功后将旧题库按 SHA-256 文件名备份到 `tools/exercise_bank/backups/`，再替换题库文件。失败时不会替换现有题库；遗留的 `.building` 文件应先检查再删除。Python 和 Pillow 仅用于题库制作，不是 Java 应用的运行依赖。
+校对题干时修改对应脚本中的转录内容；更换图片时同步修改资源裁切坐标。题库内容变更时更新 `build.py` 的 `content_version`，使发布版能够识别新题库。题数、UML 要求等规则变更时也需同步校验规则和应用测试。
 
-验证包含：SQLite 完整性、外键、章节题数和连续题号、JSON 版本与内容块、派生搜索文本、公式字段、资源引用一致性、PNG 解码、尺寸、大小及 SHA-256、来源文件与习题的关联，且不存在未被习题引用的资源。`audit.py` 与原 45 题备份逐项比较，核对全部资源与原图裁切的像素一致性，并在 `review/` 生成新增资源联系表供目视复核。已核对全部 25 张新增资源，没有因提取而截断图表内容。应用的 `CoreWorkflowTest` 验证 19 章题数、173 题正文解析及 HTML 渲染、38 张资源和 6 道 UML 必做题。
+生成脚本读取 `schema.sql`，写入临时数据库，验证成功后将旧题库按 SHA-256 文件名备份到 `tools/exercise_bank/backups/`，再替换 `src/main/resources/database/exercise.db`。失败时不会替换现有题库；遗留的 `.building` 文件需先检查再删除。Python 和 Pillow 仅用于题库制作，不是 Java 应用的运行依赖。
+
+验证包含：SQLite 完整性、外键、章节题数和连续题号、JSON 版本与内容块、派生搜索文本、公式字段、资源引用一致性、PNG 解码、尺寸、大小及 SHA-256、来源文件与习题的关联，以及资源均被习题引用。`audit.py` 还核对全部 38 张资源与原图裁切的像素一致性，并在 `review/` 生成第 5～19 章资源联系表供目视复核；它不执行题干文字的 OCR 比对，文字仍需人工对照原图。
+
+如果本地 `backups/` 存在原 45 题版本，`audit.py` 还会逐项比较前四章、45 道题及 13 张原有资源；没有该历史备份时会明确输出 `SKIP`，其余校验照常执行。历史备份不是克隆后校对的前提。
+
+提交校对结果时一并检查转录脚本、原图（如有更改）、`exercise.db` 与 `review/` 校对图的差异。`backups/`、`tools/runtime-data-backups/`、Python 缓存和 `.building` 临时文件由 Git 忽略。应用的 `CoreWorkflowTest` 验证 19 章题数、173 题正文解析及 HTML 渲染、38 张资源和 6 道 UML 必做题，可在重建后运行 `mvn test`。
+
+### 历史发布辅助脚本
+
+`tools/deploy-latest.ps1` 和 `tools/verify-release.py` 是针对固定目录与内容版本 `2026.10.03.1` 的历史迁移脚本，不是题库校对步骤：
+
+- `deploy-latest.ps1` 要求预先准备 `target/release-latest/MailAssistant` 并退出应用；它将现有运行数据备份到固定的 `tools/runtime-data-backups/20261003-update/`，复制到新构建，再删除脚本列出的旧目录并替换当前发布目录。重复执行前需检查备份目录；使用前应逐项核对脚本中的路径。
+- `verify-release.py` 检查 `target/release/MailAssistant` 的内置题库、启动后的运行时题库及上述迁移备份。它依赖已初始化的 `data/database/exercise.db`，不适用于首次启动前的纯净发布包；备份目录缺失时其数据保留比对循环不会执行，不能据此认定已验证数据迁移。
+
+常规构建使用 `packaging/windows/package.ps1`，详见 [桌面集成](desktop-integration.md#windows-应用目录构建)。
 
 release 版按 README 将此内置题库复制到 `<应用根目录>/data/database/exercise.db` 后使用。已有运行时副本在内置内容版本更新时，通过完整性、外键和结构版本检查后升级；旧副本备份到同目录 `backups/`，相同版本或更高版本不覆盖。
