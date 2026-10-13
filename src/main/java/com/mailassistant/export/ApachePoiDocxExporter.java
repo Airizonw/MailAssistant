@@ -28,7 +28,19 @@ public final class ApachePoiDocxExporter implements DocxExporter {
                     case "image" -> { picture(p.createRun(), document.assets.get(block.assetId), false); if (!block.caption.isBlank()) { p.createRun().addBreak(); text(p, block.caption, false, 10); } }
                     case "heading" -> { p.setKeepNext(true); text(p, block.text, true, 16); }
                     case "subheading" -> { p.setKeepNext(true); text(p, block.text, true, 12); }
-                    case "code" -> { p.setIndentationLeft(180); XWPFRun run = p.createRun(); run.setFontFamily("Consolas"); run.setFontSize(10); multiline(run, block.text); }
+                    case "code" -> {
+                        p.setIndentationLeft(180); p.setIndentationRight(180);
+                        var properties = p.getCTP().isSetPPr() ? p.getCTP().getPPr() : p.getCTP().addNewPPr();
+                        var shading = properties.addNewShd();
+                        shading.setVal(org.openxmlformats.schemas.wordprocessingml.x2006.main.STShd.CLEAR);
+                        shading.setColor("auto"); shading.setFill("F2F5F9");
+                        var borders = properties.addNewPBdr();
+                        for (var border : List.of(borders.addNewTop(), borders.addNewBottom(), borders.addNewLeft(), borders.addNewRight())) {
+                            border.setVal(org.openxmlformats.schemas.wordprocessingml.x2006.main.STBorder.SINGLE);
+                            border.setColor("DDE5EF"); border.setSz(java.math.BigInteger.valueOf(4)); border.setSpace(java.math.BigInteger.valueOf(8));
+                        }
+                        XWPFRun run = p.createRun(); run.setFontFamily("Consolas"); run.setFontSize(10); multiline(run, block.text);
+                    }
                     default -> { if (block.inlines.isEmpty()) text(p, block.text, block.role.equals("identity"), 11); else inlines(p, block.inlines, document); }
                 }
             }

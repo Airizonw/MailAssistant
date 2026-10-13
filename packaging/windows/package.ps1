@@ -17,7 +17,7 @@ try {
     $jar = Get-ChildItem -LiteralPath (Join-Path $projectRoot 'target') -Filter 'mail-assistant-*.jar' | Select-Object -First 1
     if (-not $jar) { throw '未找到项目 JAR' }
     Copy-Item -LiteralPath $jar.FullName -Destination (Join-Path $projectRoot 'target/package-input')
-    $packageArgs = @('--type', 'app-image', '--name', 'MailAssistant', '--app-version', '1.0.0',
+    $packageArgs = @('--type', 'app-image', '--name', 'MailAssistant', '--app-version', '1.1.0',
         '--input', 'target/package-input', '--main-jar', $jar.Name,
         '--main-class', 'com.mailassistant.Launcher', '--dest', $destinationPath,
         '--java-options', '-Dfile.encoding=UTF-8', '--vendor', 'MailAssistant')

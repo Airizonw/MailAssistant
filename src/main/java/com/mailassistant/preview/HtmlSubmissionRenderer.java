@@ -19,6 +19,7 @@ public final class HtmlSubmissionRenderer {
                 var title = ContentBlock.text("subheading", "解答"); title.role = "answer-heading"; doc.blocks.add(title);
                 var answer = ContentBlock.text("paragraph", item.answer); answer.role = "answer"; doc.blocks.add(answer);
             }
+            if (!item.sources.isEmpty()) { var title = ContentBlock.text("subheading", "代码"); title.role = "code-heading"; doc.blocks.add(title); }
             for (JavaSource source : item.sources) {
                 ContentBlock title = ContentBlock.text("subheading", source.fileName()); title.role = "source-heading"; doc.blocks.add(title);
                 ContentBlock code = ContentBlock.text("code", source.code); code.role = "source"; doc.blocks.add(code);
@@ -31,7 +32,9 @@ public final class HtmlSubmissionRenderer {
                 if (item.resultCases.size() > 1 || !c.description.isBlank()) {
                     var caseHeading = ContentBlock.text("subheading", item.resultCases.size() > 1 ? "运行情况 " + (i + 1) + (c.description.isBlank() ? "" : "：" + c.description) : c.description); caseHeading.role = "case:" + i; doc.blocks.add(caseHeading);
                 }
-                for (var image : c.images) addImage(doc, image, "result:" + i, "");
+                if (c.textMode) {
+                    var result = ContentBlock.text("paragraph", c.text); result.role = "result:" + i; doc.blocks.add(result);
+                } else for (var image : c.images) addImage(doc, image, "result:" + i, "");
             }
             for (int i = start; i < doc.blocks.size(); i++) doc.blocks.get(i).exerciseId = item.exercise.id();
         }

@@ -32,9 +32,13 @@ public final class SubmissionValidator {
                 if (source.code.isBlank()) errors.add(sourcePrefix + "缺少源代码，请填写或删除此份代码");
             }
             if (!ex.programming() && item.answer.isBlank()) errors.add(prefix + "缺少解答");
-            if ((ex.programming() || ex.requireResult()) && item.resultCases.isEmpty()) errors.add(prefix + "至少添加一种运行情况及截图");
+            if ((ex.programming() || ex.requireResult()) && item.resultCases.isEmpty()) errors.add(prefix + "至少添加一种运行情况，输入截图或文字结果");
             for (int i = 0; i < item.resultCases.size(); i++) {
                 var result = item.resultCases.get(i);
+                if (result.textMode) {
+                    if (result.text.isBlank()) errors.add(prefix + "情况 " + (i + 1) + " 缺少文字结果");
+                    continue;
+                }
                 if (result.images.isEmpty()) errors.add(prefix + "情况 " + (i + 1) + " 缺少截图");
                 for (var image : result.images) {
                     if (!images.valid(image)) errors.add(prefix + "情况 " + (i + 1) + " 的截图无效");

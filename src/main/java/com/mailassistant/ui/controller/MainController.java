@@ -56,7 +56,7 @@ public final class MainController implements AutoCloseable {
         sidebar.getChildren().addAll(spring, selection, button("草稿箱", "sidebar-button", this::showDrafts), profile, label("LOCAL FIRST\n资料与草稿仅存于本机", "sidebar-note"));
         ScrollPane sidebarScroll = scroll(sidebar); sidebarScroll.setFitToHeight(true); sidebarScroll.setPrefWidth(218);
         sidebarScroll.getStyleClass().add("sidebar-scroll"); root.setLeft(sidebarScroll); page.getStyleClass().add("page");root.setCenter(page);
-        HBox footer = row(status, spacer(), label("v1.0.0", "muted")); footer.getStyleClass().add("footer"); root.setBottom(footer);
+        HBox footer = row(status, spacer(), label("v1.1.0", "muted")); footer.getStyleClass().add("footer"); root.setBottom(footer);
     }
     public BorderPane root() { return root; }
     public boolean minimizeToTray() { return preferences.minimizeToTray; }
@@ -143,7 +143,7 @@ public final class MainController implements AutoCloseable {
                     }
                     changed();
                 });
-                VBox text = new VBox(7, label("第 " + ex.number() + " 题   " + ex.title(), "card-title"), label(ex.programming()?"编程题 · 需代码与运行截图"+(ex.requireUml()?" · 需 UML":"") : "解答题", "muted")); HBox.setHgrow(text,Priority.ALWAYS);
+                VBox text = new VBox(7, label("第 " + ex.number() + " 题   " + ex.title(), "card-title"), label(ex.programming()?"编程题 · 需代码与运行结果"+(ex.requireUml()?" · 需 UML":"") : "解答题", "muted")); HBox.setHgrow(text,Priority.ALWAYS);
                 cards.getChildren().add(card(row(selected,text,button("查看题目", "quiet", () -> showExercise(ex)))));
             }
             if (cards.getChildren().isEmpty()) cards.getChildren().add(card(label("没有找到匹配的习题", "card-title"),label("尝试其他关键词或选择另一个章节。", "muted")));
@@ -161,7 +161,7 @@ public final class MainController implements AutoCloseable {
         Dialog<Void> dialog=new Dialog<>(); dialog.initOwner(stage); dialog.setTitle(exercise.toString()); dialog.getDialogPane().setContent(web); dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE); dialog.setResizable(true); dialog.showAndWait();
     }
     private void editorPage(SubmissionItem preferred) {
-        heading("MAKE IT COMPLETE", "整理本次作业", "答案、代码与运行结果分别整理；每种运行情况支持多张截图。");
+        heading("MAKE IT COMPLETE", "整理本次作业", "答案、代码与运行结果分别整理；每种运行情况可选择截图或文字结果。");
         page.getChildren().add(row(label(submission.items.size()+" 道题已加入", "badge"),spacer(),button("保存草稿", "",this::saveDraft),button("生成正文 →", "primary",this::generate)));
         if (submission.items.isEmpty()) { content(card(label("还没有添加习题", "card-title"),label("先从题库中选择本次需要提交的题目。", "muted"),button("去选择习题", "primary",()->navigate(0)))); return; }
         ListView<SubmissionItem> list=new ListView<>(); list.getItems().setAll(submission.items); list.setPrefWidth(245); list.setMinWidth(180);
@@ -193,7 +193,7 @@ public final class MainController implements AutoCloseable {
                 label("可添加多份代码，正文按添加顺序排列。名称无需填写 .java，程序自动补全；导入文件自动使用文件名（UTF-8）。","muted"),sources));
         renderSources(sources,item);
         VBox cases=new VBox(12); Runnable render=()->renderCases(cases,item);
-        box.getChildren().add(card(row(label("程序运行结果","card-title"),spacer(),button("＋ 添加情况","",()->{item.resultCases.add(new RunResultCase());changed();render.run();})),label("每个保留的情况至少一张截图。说明可留空；支持 PNG / JPEG，单张 ≤ 10 MB。","muted"),cases));render.run();
+        box.getChildren().add(card(row(label("程序运行结果","card-title"),spacer(),button("＋ 添加情况","",()->{item.resultCases.add(new RunResultCase());changed();render.run();})),label("每种情况任选截图或文字结果；切换会保留输入，正文仅使用当前选项。截图支持 PNG / JPEG，单张 ≤ 10 MB。","muted"),cases));render.run();
         VBox uml=new VBox(8); renderImages(uml,item.umlImages,()->itemEditor(box,item));
         box.getChildren().add(card(row(label(item.exercise.requireUml()?"UML 图 · 本题必填":"UML 图 · 可选","card-title"),spacer(),button("导入 UML","",()->pickImages(item.umlImages,()->itemEditor(box,item)))),uml));
     }
@@ -218,14 +218,24 @@ public final class MainController implements AutoCloseable {
     }
     private void renderCases(VBox box,SubmissionItem item) {
         box.getChildren().clear();
-        if(item.resultCases.isEmpty())box.getChildren().add(label("暂无运行情况。添加一种情况并导入截图即可。","muted"));
+        if(item.resultCases.isEmpty())box.getChildren().add(label("暂无运行情况。添加一种情况并输入截图或文字结果即可。","muted"));
         for(int i=0;i<item.resultCases.size();i++) {
             final int index=i;RunResultCase result=item.resultCases.get(i);VBox images=new VBox(8);
             TextArea description=area(result.description,"可选：输入数据、边界条件或异常情况",v->result.description=v,2);
             Runnable redraw=()->renderCases(box,item);renderImages(images,result.images,redraw);
             Button up=button("↑","",()->{Collections.swap(item.resultCases,index,index-1);changed();redraw.run();});up.setDisable(i==0);
             Button down=button("↓","",()->{Collections.swap(item.resultCases,index,index+1);changed();redraw.run();});down.setDisable(i==item.resultCases.size()-1);
-            VBox c=card(row(label("情况 "+(i+1),"card-title"),spacer(),up,down,button("删除","quiet",()->{item.resultCases.remove(result);changed();redraw.run();})),description,images,button("＋ 导入运行截图","",()->pickImages(result.images,redraw)));c.getStyleClass().add("sub-card");box.getChildren().add(c);
+            ToggleGroup mode=new ToggleGroup();
+            RadioButton screenshotMode=new RadioButton("截图"),textMode=new RadioButton("文字结果");
+            screenshotMode.setId("result-screenshot-"+i);textMode.setId("result-text-"+i);
+            screenshotMode.setToggleGroup(mode);textMode.setToggleGroup(mode);
+            screenshotMode.setSelected(!result.textMode);textMode.setSelected(result.textMode);
+            mode.selectedToggleProperty().addListener((o,oldValue,newValue)->{result.textMode=newValue==textMode;changed();redraw.run();});
+            TextArea textInput=area(result.text,"输入或粘贴程序运行的文字结果",v->result.text=v,5);textInput.setId("result-content-"+i);
+            VBox input=result.textMode
+                    ? new VBox(textInput)
+                    : new VBox(8,images,button("＋ 导入运行截图","",()->pickImages(result.images,redraw)));
+            VBox c=card(row(label("情况 "+(i+1),"card-title"),spacer(),up,down,button("删除","quiet",()->{item.resultCases.remove(result);changed();redraw.run();})),description,row(screenshotMode,textMode),input);c.getStyleClass().add("sub-card");box.getChildren().add(c);
         }
     }
     private void renderImages(VBox box,List<ImageResource> images,Runnable redraw) {
@@ -300,7 +310,7 @@ public final class MainController implements AutoCloseable {
     }
     private void previewPage() {
         heading("REVIEW BEFORE SENDING", "最后检查，然后提交", "点击内容块定位右侧预览，可修改文字、删除或调整顺序；点击「刷新预览」核对正文。");
-        if(submission.preview==null){content(card(label("准备好后生成正文","card-title"),label("系统会检查身份信息、代码、每种运行情况的截图，以及题目要求的 UML。","muted"),button("检查并生成正文","primary",this::generate)));return;}
+        if(submission.preview==null){content(card(label("准备好后生成正文","card-title"),label("系统会检查身份信息、代码、每种运行情况的截图或文字结果，以及题目要求的 UML。","muted"),button("检查并生成正文","primary",this::generate)));return;}
         PreviewDocument doc=submission.preview;
         TextField subject=new TextField(doc.subject);subject.setEditable(false);
         page.getChildren().add(card(field("邮件主题",subject),label("To  "+doc.to+"     CC  "+(doc.cc.isEmpty()?"无":String.join("；",doc.cc)),"muted")));

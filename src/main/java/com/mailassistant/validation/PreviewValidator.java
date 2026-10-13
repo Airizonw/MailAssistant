@@ -19,12 +19,12 @@ public final class PreviewValidator {
         for (var block : doc.blocks) {
             if (block.role.equals("exercise")) { owner = block.exerciseId; currentCase = ""; phase = 0; }
             else if (block.exerciseId != 0 && block.exerciseId != owner) errors.add("正文内容已移出所属题目，请在原始编辑页调整整题顺序");
-            int nextPhase = switch (block.role) { case "question" -> 0; case "answer", "answer-heading", "source", "source-heading" -> 1; case "uml", "uml-heading" -> 2; case "result-heading" -> 3; default -> block.role.startsWith("case:") || block.role.startsWith("result:") ? 3 : phase; };
+            int nextPhase = switch (block.role) { case "question" -> 0; case "answer", "answer-heading", "source", "source-heading", "code-heading" -> 1; case "uml", "uml-heading" -> 2; case "result-heading" -> 3; default -> block.role.startsWith("case:") || block.role.startsWith("result:") ? 3 : phase; };
             if (nextPhase < phase) errors.add("请保持题目 → 解答/代码 → UML → 运行结果的顺序");
             phase = nextPhase;
             if (block.role.equals("result-heading")) currentCase = submission.items.stream().anyMatch(item -> item.exercise.id() == block.exerciseId && item.resultCases.size() == 1) ? "0" : "";
             if (block.role.startsWith("case:")) currentCase = block.role.substring(5);
-            if (block.role.startsWith("result:") && !block.role.substring(7).equals(currentCase)) errors.add("截图已移出对应运行情况，请在原始编辑页调整情况顺序");
+            if (block.role.startsWith("result:") && !block.role.substring(7).equals(currentCase)) errors.add("运行结果已移出对应运行情况，请在原始编辑页调整情况顺序");
         }
         for (SubmissionItem item : submission.items) {
             var blocks = doc.blocks.stream().filter(b -> b.exerciseId == item.exercise.id()).toList();
@@ -36,7 +36,8 @@ public final class PreviewValidator {
             if (blocks.stream().filter(b -> b.role.equals("source-heading") && !b.text.isBlank()).count() < item.sources.size()) errors.add(prefix + "请保留每份代码的名称");
             for (int i=0;i<item.resultCases.size();i++) {
                 String role = "result:" + i;
-                if (blocks.stream().noneMatch(b -> b.role.equals(role) && b.type.equals("image"))) errors.add(prefix + "运行情况 " + (i+1) + " 缺少截图");
+                boolean textMode = item.resultCases.get(i).textMode;
+                if (blocks.stream().noneMatch(b -> b.role.equals(role) && (textMode ? b.type.equals("paragraph") && !b.text.isBlank() : b.type.equals("image")))) errors.add(prefix + "运行情况 " + (i+1) + (textMode ? " 缺少文字结果" : " 缺少截图"));
             }
             if (item.exercise.requireUml() && blocks.stream().noneMatch(b -> b.role.equals("uml") && b.type.equals("image"))) errors.add(prefix + "缺少必需 UML 图");
         }

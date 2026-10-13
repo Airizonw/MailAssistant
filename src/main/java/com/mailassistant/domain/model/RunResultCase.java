@@ -5,5 +5,7 @@ import java.util.List;
 
 public class RunResultCase {
     public String description = "";
+    public boolean textMode = false;
+    public String text = "";
     public List<ImageResource> images = new ArrayList<>();
 }

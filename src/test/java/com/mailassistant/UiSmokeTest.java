@@ -38,7 +38,7 @@ class UiSmokeTest {
             assertFalse(fx(()->controller.root().isDisabled()));snapshot("01-exercises");
             verifyRevertedSelection();
             fx(()->{var field=MainController.class.getDeclaredField("submission");field.setAccessible(true);field.set(controller,CoreWorkflowTest.complete());return null;});
-            click("02   编辑作业");verifySourceControls();snapshot("02-editor");
+            click("02   编辑作业");verifySourceControls();verifyResultControls();snapshot("02-editor");
             click("03   预览与提交");Thread.sleep(700);verifyPreviewNavigation();snapshot("03-preview");
             click("个人中心");verifyProfileControls();snapshot("04-settings");
             fx(()->{stage.setWidth(1040);stage.setHeight(720);return null;});Thread.sleep(400);snapshot("05-settings-small");
@@ -87,6 +87,23 @@ class UiSmokeTest {
             assertNull(s.preview);assertEquals(2,s.items.getFirst().sources.size());
             assertEquals("class Helper {}",s.items.getFirst().sources.get(1).code);
             s.preview=new com.mailassistant.preview.HtmlSubmissionRenderer().compose(s);
+            return null;
+        });
+    }
+    private void verifyResultControls() throws Exception {
+        fx(()->{
+            var field=MainController.class.getDeclaredField("submission");field.setAccessible(true);var s=(Submission)field.get(controller);
+            var result=s.items.getFirst().resultCases.getFirst();
+            ((javafx.scene.control.RadioButton)controller.root().lookup("#result-text-0")).fire();
+            assertTrue(result.textMode);assertNull(s.preview);
+            ((javafx.scene.control.TextArea)controller.root().lookup("#result-content-0")).setText("42\n第二行");
+            assertEquals("42\n第二行",result.text);
+            ((javafx.scene.control.RadioButton)controller.root().lookup("#result-screenshot-0")).fire();
+            assertFalse(result.textMode);assertNull(controller.root().lookup("#result-content-0"));
+            assertEquals(1,result.images.size());
+            ((javafx.scene.control.RadioButton)controller.root().lookup("#result-text-0")).fire();
+            assertEquals("42\n第二行",((javafx.scene.control.TextArea)controller.root().lookup("#result-content-0")).getText());
+            s.preview=new com.mailassistant.application.SubmissionService(null).generate(s);
             return null;
         });
     }

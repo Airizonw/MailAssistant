@@ -57,13 +57,19 @@ class CoreWorkflowTest {
         Path output=temp.resolve("formatting.docx");new ApachePoiDocxExporter().export(s.preview,output);
         try(var doc=new XWPFDocument(Files.newInputStream(output))) {
             assertTrue(doc.getParagraphs().getFirst().getRuns().getFirst().isBold());
-            for(String heading:List.of("解答","运行结果")) {
+            for(String heading:List.of("解答","代码","运行结果")) {
                 var run=doc.getParagraphs().stream().filter(p->p.getText().equals(heading)).findFirst().orElseThrow().getRuns().getFirst();
                 assertTrue(run.isBold());assertEquals(12,run.getFontSizeAsDouble());
             }
             var text=doc.getParagraphs().stream().map(XWPFParagraph::getText).reduce("",(a,b)->a+"\n"+b);
             assertTrue(text.indexOf("UML 图")<text.indexOf("运行结果"));
             assertFalse(doc.getParagraphs().stream().anyMatch(p->p.getText().equals("UML")));
+            var code=doc.getParagraphs().stream().filter(p->p.getText().startsWith("public class Main")).findFirst().orElseThrow();
+            var properties=code.getCTP().getPPr();
+            assertEquals("F2F5F9",java.util.HexFormat.of().withUpperCase().formatHex((byte[])properties.getShd().getFill()));
+            assertTrue(properties.getPBdr().isSetTop());assertTrue(properties.getPBdr().isSetBottom());
+            assertTrue(properties.getPBdr().isSetLeft());assertTrue(properties.getPBdr().isSetRight());
+            assertEquals("Consolas",code.getRuns().getFirst().getFontFamily());
         }
         var uml=s.preview.blocks.stream().filter(b->b.role.equals("uml")).findFirst().orElseThrow();
         s.preview.blocks.remove(uml);s.preview.blocks.add(uml);
@@ -138,6 +144,44 @@ class CoreWorkflowTest {
         assertTrue(text.indexOf("Zebra.java")<text.indexOf("class Zebra {}"));
         assertTrue(text.indexOf("class Zebra {}")<text.indexOf("Alpha.java"));
         assertTrue(text.indexOf("Alpha.java")<text.indexOf("class Alpha {}"));
+    }
+    @Test void textResultsSurviveDraftPreviewMailAndDocx() throws Exception {
+        var s=complete();var result=s.items.getFirst().resultCases.getFirst();
+        result.textMode=true;result.text="结果 <42> & 中文\n  第二行";
+        var service=new SubmissionService(null);s.preview=service.generate(s);service.validateFinal(s);
+        assertFalse(s.preview.assets.containsKey("first"));assertTrue(s.preview.assets.containsKey("second"));
+        var repository=new EncryptedDraftRepository(temp.resolve("text-drafts"),crypto());repository.save(s);
+        s=repository.load(s.id);result=s.items.getFirst().resultCases.getFirst();
+        assertTrue(result.textMode);assertEquals("结果 <42> & 中文\n  第二行",result.text);
+        assertEquals(1,result.images.size());
+        var block=s.preview.blocks.stream().filter(b->b.role.equals("result:0")).findFirst().orElseThrow();
+        block.text="修改后 <42> & 中文\n  第二行";service.validateFinal(s);
+        String html=new HtmlSubmissionRenderer().html(s.preview,true);
+        assertTrue(html.contains("修改后 &lt;42&gt; &amp; 中文\n  第二行"));
+        var client=new JakartaMailClient();var message=client.compose(Session.getInstance(client.properties(s.account)),s.account,s.preview);
+        assertTrue(((Multipart)message.getContent()).getBodyPart(0).getContent().toString().contains("修改后 &lt;42&gt;"));
+        Path output=temp.resolve("text-result.docx");new ApachePoiDocxExporter().export(s.preview,output);
+        try(var doc=new XWPFDocument(Files.newInputStream(output))) {
+            assertTrue(doc.getParagraphs().stream().anyMatch(p->p.getText().equals(block.text)));
+            assertEquals(1,doc.getAllPictures().size());
+        }
+        block.text=" \n ";assertTrue(new PreviewValidator().validate(s).stream().anyMatch(e->e.contains("缺少文字结果")));
+        result.text=" \n ";assertTrue(new SubmissionValidator().validate(s).stream().anyMatch(e->e.contains("缺少文字结果")));
+        result.textMode=false;assertTrue(new SubmissionValidator().validate(s).isEmpty());
+    }
+    @Test void singleTextResultNeedsContentAndCannotMoveOutsideItsCase() throws Exception {
+        var s=complete();var item=s.items.getFirst();
+        item.resultCases.getFirst().textMode=true;item.resultCases.getFirst().text="42";
+        s.preview=new SubmissionService(null).generate(s);
+        var block=s.preview.blocks.stream().filter(b->b.role.equals("result:0")).findFirst().orElseThrow();
+        s.preview.blocks.remove(block);s.preview.blocks.add(block);
+        assertTrue(new PreviewValidator().validate(s).stream().anyMatch(e->e.contains("对应运行情况")));
+        item.resultCases.removeLast();item.resultCases.getFirst().description="";
+        s.preview=new SubmissionService(null).generate(s);assertTrue(new PreviewValidator().validate(s).isEmpty());
+        s.preview.blocks.removeIf(b->b.role.equals("result:0"));
+        assertTrue(new PreviewValidator().validate(s).stream().anyMatch(e->e.contains("缺少文字结果")));
+        var legacy=JsonUtil.MAPPER.readValue("{\"description\":\"旧情况\",\"images\":[]}",RunResultCase.class);
+        assertFalse(legacy.textMode);assertEquals("",legacy.text);
     }
     @Test void everySourceNeedsNameAndContentAndImportUsesFilename() throws Exception {
         var s=complete();var source=new JavaSource("","class Helper {}");s.items.getFirst().sources.add(source);
